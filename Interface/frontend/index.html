@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<!--
+  Datei: nova_chatbot_commented.html
+  Beschreibung:
+    Dies ist die Frontend‑Datei (HTML/CSS/JS) für den Chatbot "Nova",
+    der Nutzern bei Fragen rund um Bose­Produkte hilft. Die Datei enthält
+    ausschließlich Präsentations‑ und Client‑Logik. Alle Aufrufe an den
+    Server (Flask Back‑End) erfolgen via Fetch‑API.
+-->
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Nova - Chatbot für Bose-Produkte</title>
+  <!--
+    Verweis auf die zentrale Stylesheet‑Datei. 
+  -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+  <!--
+    Hauptelement (Flex‑Layout)
+    Enthält die seitliche Navigationsleiste (sidebar) sowie den eigentlichen
+    Chatbereich (chat-container).
+  -->
+  <div class="container">
+    <!--
+      =============== Sidebar ===============
+      Beinhaltet Logo, E‑Mail‑Eingabefeld, Liste vorhandener Chat‑Sessions
+      sowie Buttons für neue Session / Beenden.
+    -->
+    <div class="sidebar">
+      <!-- Avatar/Logo für Nova -->
+      <img src="{{ url_for('static', filename='Nova.png') }}" alt="Nova" class="nova-image">
+
+      <!--
+        E‑Mail‑Eingabe: Speichert (optionale) Nutzeradresse, damit der Server
+        eindeutige Sessions pro Kunde anlegen kann.
+      -->
+      <div class="email-container">
+        <label for="email-input">Gib deine E-Mail ein:</label>
+        <input type="email" id="email-input" placeholder="name@example.com">
+        <button id="save-email">Speichern</button>
+      </div>
+
+      <!-- Liste bereits bestehender Chat-Sessions für eingeloggte Nutzer -->
+      <div id="chat-session-list">
+        <h3>Vorherige Chats</h3>
+        <ul id="session-list"></ul>
+      </div>
+
+      <!-- Anzeige der momentan aktiven Chat-ID -->
+      <div id="chat-id-container">
+        <span id="current-chat-id"></span>
+      </div>
+
+      <!--
+        Untere Button‑Leiste in der Sidebar: Info‑Toggle, neue Session, Ende.
+      -->
+      <div class="bottom-bar">
+        <button class="about-toggle" id="about-toggle">?</button>
+        <div class="buttons-group">
+          <button id="new-session">Neue Session</button>
+          <button class="end-chat-button" id="end-chat">Beenden</button>
+        </div>
+      </div>
+    </div> <!-- /sidebar -->
+
+    <!--
+      =============== Chat-Bereich ===============
+      Zeigt Verlauf sowie Eingabefeld (Form) für neue Nachrichten.
+    -->
+    <div class="chat-container">
+      <!-- Container für Chatnachrichten -->
+      <div id="chatbox"><!-- Nachrichten werden dynamisch per JS eingefügt --></div>
+
+      <!-- Formular für Nutzereingaben -->
+      <form id="chat-form">
+        <input type="text" id="user-input" placeholder="Stelle Nova eine Frage..." autocomplete="off">
+        <button type="submit">Senden</button>
+      </form>
+    </div> <!-- /chat-container -->
+  </div> <!-- /container -->
+
+  <!--
+    =============== About‑Sidebar ===============
+    Klappt beim Klick auf das Fragezeichen auf. Liefert Erläuterungen zu
+    Funktionen für anonyme Nutzer vs. Bestandskunden.
+  -->
+  <div class="about-sidebar" id="about-sidebar">
+    <h2>About Nova</h2>
+    <p>
+      Nova ist dein virtueller Assistent für Bose-Produkte. Sie hilft dir bei Fragen, 
+      Problemen und Anleitungen rund um deine Geräte.
+    </p>
+    
+    <!-- Abschnitt: anonyme Nutzung -->
+    <h3>Anonyme Nutzung</h3>
+    <p>Wenn du dich nicht anmeldest, kannst du:</p>
+    <ul>
+      <li>Allgemeine Fragen zu Bose-Produkten stellen</li>
+      <li>Kurze Anleitungen abrufen (z.B. Verbindung herstellen)</li>
+    </ul>
+    <p>Beispielfragen:</p>
+    <ul>
+      <li>Wie schließe ich meine Lautsprecher an?</li>
+      <li>Was mache ich, wenn mein Gerät nicht funktioniert?</li>
+      <li>Welche Produkte passen zu meinem Setup?</li>
+    </ul>
+    
+    <!-- Abschnitt: Vorteile für Bestandskunden -->
+    <h3>Vorteile als Bestandskunde</h3>
+    <p>Wenn du dich anmeldest, kannst du zusätzlich:</p>
+    <ul>
+      <li>Auf deine gespeicherten Chat-Verläufe zugreifen und diese fortführen</li>
+      <li>Persönliche Daten abrufen (z.B. gekaufte Produkte, Bestellhistorie)</li>
+      <li>Gezieltere Produktempfehlungen erhalten</li>
+    </ul>
+    <p>Beispielfragen:</p>
+    <ul>
+      <li>Welche Produkte habe ich zuletzt gekauft?</li>
+      <li>Wie kann ich meine bisherigen Bestellungen einsehen?</li>
+      <li>Welche Garantie habe ich auf meine Geräte?</li>
+    </ul>
+  </div> <!-- /about-sidebar -->
+  
+  <!--
+    =======================================================
+    JavaScript: Client‑seitige Logik
+    =======================================================
+    Enthält:
+      * DOM‑Hooks & Eventlistener
+      * Fetch‑Aufrufe zu Flask‑Routen (/start-session, /chat, ...)
+      * Dynamische Darstellung eingehender/ausgehender Nachrichten
+  -->
+  <script>
+    // === Element‑Referenzen ===
+    const form            = document.getElementById('chat-form');
+    const chatbox         = document.getElementById('chatbox');
+    const aboutSidebar    = document.getElementById('about-sidebar');
+    const aboutToggle     = document.getElementById('about-toggle');
+    const sessionListElem = document.getElementById('session-list');
+
+    /* ----------------------------------------------------
+       Begrüßungsnachricht beim ersten Laden
+       ---------------------------------------------------- */
+    document.addEventListener('DOMContentLoaded', async () => {
+      // 1) Anonyme Session beim Erstbesuch anlegen
+      const resp = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'email=' // Leerer Wert => "anonymous" auf Server
+      });
+      const data = await resp.json();
+
+      if (data.chat_id) {
+        window.chatId = data.chat_id; // globale Chat‑ID merken
+        // Chat-ID im UI anzeigen
+        document.getElementById('current-chat-id').textContent = `Chat-ID: ${data.chat_id}`;
+      }
+
+      // Begrüßungs-Bubble einfügen
+      chatbox.innerHTML += `
+        <div class="bot-message">
+          <div class="message-sender">Nova</div>
+          <div class="message-content">
+            <p>👋 <strong>Hallo und herzlich willkommen!</strong><br>
+            Ich bin <strong>Nova</strong>, deine virtuelle Assistentin. Es freut mich, dass du hier bist! 😊</p>
+            <p>📌 <strong>Wie kann ich dir heute helfen?</strong><br>
+            Hast du Fragen zu <strong>Bose-Produkten</strong> oder benötigst du Unterstützung? Ich bin hier, um dich Schritt für Schritt zu begleiten und dir zu helfen. 💡</p>
+          </div>
+        </div>`;
+      chatbox.scrollTop = chatbox.scrollHeight;
+
+      // Vorhandene Sessions laden (falls eingeloggt)
+      loadSessions();
+    });
+
+    /**
+     * Setzt erneut die initiale Begrüßung (z.B. nach Session‑Wechsel).
+     */
+    function setNovaGreeting() {
+      chatbox.innerHTML = `
+        <div class="bot-message">
+          <div class="message-sender">Nova</div>
+          <div class="message-content">
+            <p>👋 <strong>Hallo und herzlich willkommen!</strong><br>
+            Ich bin <strong>Nova</strong>, deine virtuelle Assistentin. Es freut mich, dass du hier bist! 😊</p>
+            <p>📌 <strong>Wie kann ich dir heute helfen?</strong><br>
+            Hast du Fragen zu <strong>Bose-Produkten</strong> oder benötigst du Unterstützung?
+            Ich bin hier, um dich Schritt für Schritt zu begleiten und dir zu helfen. 💡</p>
+          </div>
+        </div>`;
+    }
+
+    /**
+     * Helfer zum Hinzufügen einer Bot‑Nachricht (ohne erneutes Scrollen).
+     */
+    function addBotMessage(message) {
+      chatbox.innerHTML += `
+        <div class="bot-message">
+          <div class="message-sender">Nova</div>
+          <div class="message-content">${message}</div>
+        </div>`;
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    // === About‑Sidebar ein/ausklappen ===
+    aboutToggle.addEventListener('click', () => {
+      aboutSidebar.classList.toggle('open');
+      document.querySelector('.container').classList.toggle('shifted');
+    });
+
+    // ----------------------------------------
+    //  E‑Mail speichern und (neu) einloggen  
+    // ----------------------------------------
+    let currentEmail = "anonymous"; // Default
+
+    document.getElementById('save-email').addEventListener('click', async () => {
+      const newEmail = document.getElementById('email-input').value.trim() || "anonymous";
+  
+      // Falldifferenzierung: Nutzer wechselt von E-Mail A zu B (nicht "anonymous")
+      if (currentEmail !== "anonymous" && currentEmail !== newEmail) {
+        // 1) Alte Session beenden
+        await fetch('/end-session', { method: 'POST' });
+  
+        // 2) Chatfenster leeren & Begrüßung setzen
+        document.getElementById('chatbox').innerHTML = '';
+        setNovaGreeting();
+      }
+  
+      // 3) Neue Session starten (email an Server senden)
+      const resp = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `email=${encodeURIComponent(newEmail)}`
+      });
+      const data = await resp.json();
+      
+      if (data.error) {
+        alert(data.error);
+      } else {
+        // 4) Session-ID übernehmen
+        window.chatId = data.chat_id;
+        document.getElementById('current-chat-id').textContent = `Chat-ID: ${data.chat_id}`;
+        alert(`Neue Session gestartet unter E-Mail: ${newEmail}`);
+      }
+  
+      // 5) Globale Mail-Adresse aktualisieren
+      currentEmail = newEmail;
+  
+      // 6) Sessions neu laden
+      loadSessions();
+    });
+
+    // ----------------------------------------
+    //  Formular: Nachricht absenden           
+    // ----------------------------------------
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault(); // Seite nicht neuladen
+
+      const userInput  = document.getElementById('user-input').value;
+      const emailInput = document.getElementById('email-input').value; // evtl. später genutzt
+      
+      // Nutzereingabe anzeigen
+      chatbox.innerHTML += `
+        <div class="user-message">
+          <div class="message-sender">Du</div>
+          <div class="message-content">${userInput}</div>
+        </div>`;
+      document.getElementById('user-input').value = '';
+    
+      // Ladeanimation einsetzen
+      let loadingBox = document.createElement('div');
+      loadingBox.className = 'loading-box';
+      loadingBox.innerHTML = `
+        <span class="dot"></span>
+        <span class="dot"></span>
+        <span class="dot"></span>`;
+      chatbox.appendChild(loadingBox);
+      loadingBox.style.display = 'flex';
+      chatbox.scrollTop = chatbox.scrollHeight;
+    
+      try {
+        // POST an /chat senden (JSON)
+        const response = await fetch('/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message: userInput,
+            chat_id: window.chatId
+          })
+        });
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(errorText || `HTTP-Error: ${response.status}`);
+        }
+    
+        const data = await response.json();
+        loadingBox.remove();
+    
+        if (data.error) {
+          // Fehlermeldung des Bots anzeigen
+          chatbox.innerHTML += `
+            <div class="bot-message error">
+              <div class="message-sender">Nova (Fehler)</div>
+              <div class="message-content">
+                <p>${data.error}</p>
+              </div>
+            </div>`;
+        } else {
+          // Normale Bot‑Antwort anzeigen
+          chatbox.innerHTML += `
+            <div class="bot-message">
+              <div class="message-sender">Nova</div>
+              <div class="message-content">${data.response}</div>
+            </div>`;
+        }
+      } catch (err) {
+        loadingBox.remove();
+        chatbox.innerHTML += `
+          <div class="bot-message error">
+            <div class="message-sender">Nova (Fehler)</div>
+            <div class="message-content">
+              <p><strong>Fehler beim Senden der Anfrage:</strong></p>
+              <p>${err.message}</p>
+            </div>
+          </div>`;
+      }
+    
+      chatbox.scrollTop = chatbox.scrollHeight;
+      loadSessions(); // Liste ggf. updaten (z.B. wenn neue Session erzeugt wurde)
+    });
+
+    // ----------------------------------------
+    //  Neue Session (Button in Sidebar)       
+    // ----------------------------------------
+    document.getElementById('new-session').addEventListener('click', async () => {
+      // Aktuelle (oder leere => anonymous) Mailadresse holen
+      const currentEmail = document.getElementById('email-input').value.trim() || "anonymous";
+      
+      // Neue Session anfordern
+      const resp = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `email=${encodeURIComponent(currentEmail)}`
+      });
+      const data = await resp.json();
+
+      if (data.error) {
+        alert(data.error);
+      } else if (data.chat_id) {
+        window.chatId = data.chat_id; // neue Chat‑ID
+        document.getElementById('current-chat-id').textContent = `Chat-ID: ${data.chat_id}`;
+
+        // Chatbox leeren und Begrüßung neu anzeigen
+        document.getElementById('chatbox').innerHTML = '';
+        setNovaGreeting();
+
+        alert(`Neue Session gestartet für ${currentEmail}`);
+
+        loadSessions();
+      }
+    });
+    
+    // ----------------------------------------
+    //  Session beenden (Button "Beenden")     
+    // ----------------------------------------
+    document.getElementById('end-chat').addEventListener('click', async () => {
+      // 1) Aktive Session beenden
+      const endResp = await fetch('/end-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      const endData = await endResp.json();
+      if (endData.message) {
+        alert(endData.message);
+      }
+    
+      // 2) E‑Mail Feld zurücksetzen
+      document.getElementById('email-input').value = '';
+    
+      // 3) Neue anonyme Session starten
+      const newSessionResp = await fetch('/start-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: 'email=' // leeres Feld => anonymous
+      });
+      const newSessionData = await newSessionResp.json();
+      window.chatId = newSessionData.chat_id;
+      document.getElementById('current-chat-id').textContent = `Chat-ID: ${newSessionData.chat_id}`;
+    
+      // 4) Begrüßung anzeigen + Liste updaten
+      setNovaGreeting();
+      loadSessions();
+    });
+
+    // ----------------------------------------
+    //  Bisherige Sessions abrufen (Sidebar)   
+    // ----------------------------------------
+    async function loadSessions() {
+      let emailInputValue = document.getElementById('email-input').value.trim();
+      if (emailInputValue.toLowerCase() === "anonymous") {
+        emailInputValue = ""; // Server erwartet leeren String für anonymous
+      }
+    
+      // Wenn keine Mail hinterlegt -> Hinweis anzeigen & abbrechen
+      if (!emailInputValue) {
+        sessionListElem.innerHTML = `
+          <li style="list-style:none; font-style: italic; color: #666;">
+              Du bist aktuell nicht angemeldet.<br>
+              Bitte gib deine E-Mail ein, um auf vorherige Chats zugreifen zu können.
+          </li>
+        `;
+        return;
+      }
+      
+      const response = await fetch('/get-sessions');
+      const sessions  = await response.json();
+      sessionListElem.innerHTML = '';
+      
+      // Jede Session als Listenelement rendern
+      sessions.forEach(sessionItem => {
+        const li = document.createElement('li');
+        const date = new Date(sessionItem.created_at).toLocaleString();
+        li.textContent = `Chat vom ${date}`;
+        li.dataset.chatId = sessionItem.id;
+    
+        // Klick auf eine Session: umschalten
+        li.addEventListener('click', async () => {
+          const selectResp = await fetch(`/select-session/${sessionItem.id}`, { method: 'POST' });
+          if (!selectResp.ok) {
+            alert("Fehler beim Umschalten auf diesen Chat");
+            return;
+          }
+
+          window.chatId = sessionItem.id;
+          document.getElementById('current-chat-id').textContent = `Chat-ID: ${sessionItem.id}`;
+          await loadSessionConversation(sessionItem.id);
+        });
+
+        sessionListElem.appendChild(li);
+      });
+    }
+    
+    // ----------------------------------------
+    //  Einzelnen Chatverlauf nachladen         
+    // ----------------------------------------
+    async function loadSessionConversation(chatId) {
+      const response   = await fetch(`/get-session/${chatId}`);
+      const sessionData = await response.json();
+
+      if(sessionData.error) {
+        alert(sessionData.error);
+        return;
+      }
+
+      window.chatId = sessionData.id;
+      chatbox.innerHTML = '';
+
+      // Begrüßung erneut setzen
+      chatbox.innerHTML += `
+      <div class="bot-message">
+        <div class="message-sender">Nova</div>
+        <div class="message-content">
+          <p>👋 <strong>Hallo und herzlich willkommen!</strong><br>
+          Ich bin <strong>Nova</strong>, deine virtuelle Assistentin. Es freut mich, dass du hier bist! 😊</p>
+          <p>📌 <strong>Wie kann ich dir heute helfen?</strong><br>
+          Hast du Fragen zu <strong>Bose-Produkten</strong> oder benötigst du Unterstützung? 
+          Ich bin hier, um dich Schritt für Schritt zu begleiten und dir zu helfen. 💡</p>
+        </div>
+      </div>
+      `;
+
+      // Vorherige Nachrichten rendern
+      sessionData.messages.forEach(msg => {
+        if(msg.sender === 'user') {
+          chatbox.innerHTML += `
+            <div class="user-message">
+              <div class="message-sender">Du</div>
+              <div class="message-content">${msg.content}</div>
+            </div>`;
+        } else {
+          chatbox.innerHTML += `
+            <div class="bot-message">
+              <div class="message-sender">Nova</div>
+              <div class="message-content">${msg.content}</div>
+            </div>`;
+        }
+      });
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+  </script>
+</body>
+</html>
