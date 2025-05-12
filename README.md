@@ -19,36 +19,39 @@ Bevor du mit der Anwendung loslegst, stelle sicher, dass du Folgendes installier
 - Zugriff auf eine SQL-Datenbank (optional, je nach Agent-Konfiguration)
 - Ein `.env`-File im Projekt-Root mit den folgenden Einträgen:
 
-  ```dotenv
-# OpenAI (Azure OpenAI Service)
-OPENAI_API_VERSION="2024-08-01-preview"
-OPENAI_API_KEY=<dein_openai_api_key>
-OPENAI_ENDPOINT=<dein_openai_endpoint>
-OPENAI_DEPLOYMENT_NAME_4o="gpt-4o"
-OPENAI_DEPLOYMENT_NAME_35-turbo="gpt-35-turbo"
-OPENAI_DEPLOYMENT_NAME_4omini="gpt-4o-mini"
+  ```
+  dotenv
+  # OpenAI (Azure OpenAI Service)
+  OPENAI_API_VERSION="2024-08-01-preview"
+  OPENAI_API_KEY=<dein_openai_api_key>
+  OPENAI_ENDPOINT=<dein_openai_endpoint>
+  OPENAI_DEPLOYMENT_NAME_4o="gpt-4o"
+  OPENAI_DEPLOYMENT_NAME_35-turbo="gpt-35-turbo"
+  OPENAI_DEPLOYMENT_NAME_4omini="gpt-4o-mini"
+  
+  # Cosmos DB
+  COSMOS_ENDPOINT=<dein_cosmos_endpoint>
+  COSMOS_KEY=<dein_cosmos_key>
 
-# Cosmos DB
-COSMOS_ENDPOINT=<dein_cosmos_endpoint>
-COSMOS_KEY=<dein_cosmos_key>
+  # Embeddings (Ada)
+  ADA_ENDPOINT=<dein_embedding_endpoint>
+  ADA_EMBEDDING_KEY=<dein_embedding_schluessel>
 
-# Embeddings (Ada)
-ADA_ENDPOINT=<dein_embedding_endpoint>
-ADA_EMBEDDING_KEY=<dein_embedding_schluessel>
+  # SQL-Datenbank (für relationalen Agenten, optional)
+  USERNAME_RELDB=<db_username>
+  PASSWORD_RELDB=<db_passwort>
 
-# SQL-Datenbank (für relationalen Agenten, optional)
-USERNAME_RELDB=<db_username>
-PASSWORD_RELDB=<db_passwort>
+  # Weitere Einstellungen
+  maxTokens=1000
 
-# Weitere Einstellungen
-maxTokens=1000
-
-# (Optional) Azure SDK / CLI
-AZURE_API_KEY=<dein_azure_api_key>
-AZURE_ENDPOINT=<dein_azure_endpoint>
+  # (Optional) Azure SDK / CLI
+  AZURE_API_KEY=<dein_azure_api_key>
+  AZURE_ENDPOINT=<dein_azure_endpoint>
 
   Zu finden sind diese Keys im Microsoft Azure Workspace von Ceteris AG. Ebenso sind die Umgebungsvariablen in der Dokumentation enthalten und erklärt.
   ```
+ 
+
 
 > **Hinweis:** Speichere das `.env`-File im Projekt-Root, damit `dotenv` es automatisch lädt.
 
@@ -171,7 +174,7 @@ SOLUTION.HTW_RAG/
 
 ---
 
-# Hinweis: Eine ausführliche Dokumentation finden Sie in Ceteris. Diese wurde mit der Projektgruppe der HTW im Modul "Projekt Business Intelligence" erstellt.
+# Hinweis: Eine ausführliche Dokumentation liegt der Ceteris AG vor. Diese wurde mit der Projektgruppe der HTW im Modul "Projekt Business Intelligence" erstellt.
 
 Autoren: 
 
